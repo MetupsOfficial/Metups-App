@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Notifications — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../Authentication/styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <nav class="top-nav">
+    <button class="nav-icon-btn" onclick="history.back()">
+      <i class="fas fa-arrow-left" style="color:var(--blue)"></i>
+    </button>
+      <div class="nav-logo" style="font-size:1.1rem">
+          <div class="logo-text" style="font-weight: 600;">
+            <span>Notifications</span>
+          </div>
+      </div>
+    <button class="nav-icon-btn" onclick="markAllRead()" title="Mark all read">
+      <i class="fas fa-check-double" style="color:var(--blue)"></i>
+    </button>
+  </nav>
+
+  <div style="height:var(--nav-height)"></div>
+
+<div id="notifList"></div>
+
+  <script>
+    const notifList = document.getElementById("notifList");
+
+    const skeleton = `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;border-bottom:1px solid var(--border)">
+        <div class="skeleton" style="width:44px;height:44px;border-radius:50%;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div class="skeleton" style="height:13px;width:90%;margin-bottom:6px"></div>
+          <div class="skeleton" style="height:10px;width:40%"></div>
+        </div>
+      </div>
+    `;
+
+    notifList.innerHTML = Array(4).fill().map(() => skeleton).join("");
+  </script>
+
+  <div id="notifEmpty" class="empty-state" style="display:none">
+    <i class="fas fa-bell-slash"></i>
+    <h3>No notifications</h3>
+    <p>We'll let you know when something happens.</p>
+  </div>
+
+</div>
+
+<script type="module">
+  import { supabaseClient } from '../Authentication/supabase.js';
+  import { checkAuth } from '../Authentication/utils.js';
+
+  /** Map notification type → icon and colour */
+  const TYPE_MAP = {
+    new_message:      { icon: 'fas fa-comment-dots', color: 'var(--blue)',   label: 'Message' },
+    product_viewed:   { icon: 'fas fa-eye',          color: 'var(--teal-dark)', label: 'View' },
+    wishlist_match:   { icon: 'fas fa-heart',        color: 'var(--red)',    label: 'Match' },
+    product_sold:     { icon: 'fas fa-check-circle', color: 'var(--green)',  label: 'Sold' },
+    product_uploaded: { icon: 'fas fa-upload',       color: 'var(--orange)', label: 'Listed' },
+    new_review:       { icon: 'fas fa-star',         color: '#F59E0B',       label: 'Review' },
+  };
+
+  function timeAgo(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1)   return 'Just now';
+    if (mins < 60)  return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `${hrs}h ago`;
+    return `${Math.floor(hrs/24)}d ago`;
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const user = await checkAuth();
+    if (!user) { window.location.href = '../Authentication/login.html'; return; }
+    await loadNotifications(user.id);
+  });
+
+  async function loadNotifications(userId) {
+    const { data, error } = await supabaseClient
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    const list = document.getElementById('notifList');
+
+    if (error || !data || data.length === 0) {
+      list.innerHTML = '';
+      document.getElementById('notifEmpty').style.display = 'block';
+      return;
+    }
+
+    list.innerHTML = data.map(n => {
+      const t = TYPE_MAP[n.type] || { icon: 'fas fa-bell', color: 'var(--teal-dark)' };
+      return `
+        <div class="notif-item ${n.read_at ? '' : 'unread'}" onclick="handleNotifClick('${n.id}', ${JSON.stringify(n.data || {}).replace(/"/g,'&quot;')})">
+          <div class="notif-icon" style="background:${t.color}20">
+            <i class="${t.icon}" style="color:${t.color}"></i>
+          </div>
+          <div class="notif-body">
+            <div class="notif-text">${escHtml(n.body)}</div>
+            <div class="notif-time">${timeAgo(n.created_at)}</div>
+          </div>
+          ${!n.read_at ? '<div class="notif-unread-dot"></div>' : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.handleNotifClick = async (notifId, data) => {
+    // Mark as read
+    await supabaseClient.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', notifId);
+
+    // Navigate based on data payload
+    if (data?.conversation_id) {
+      window.location.href = `../Messaging/messaging.html?conversation=${data.conversation_id}`;
+    } else if (data?.product_id) {
+      window.location.href = `../Dashboard/product.html?id=${data.product_id}`;
+    }
+  };
+
+  window.markAllRead = async () => {
+    const user = await checkAuth();
+    if (!user) return;
+    await supabaseClient.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+      .is('read_at', null);
+    location.reload();
+  };
+
+  function escHtml(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

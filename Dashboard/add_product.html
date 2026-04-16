@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Add Listing — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../Authentication/styles.css">
+  <link rel="manifest" href="../manifest.json">
+  <meta name="theme-color" content="#4DD9C0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Metups">
+  <link rel="apple-touch-icon" href="../icons/Metups_logo-192.png">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Top Nav -->
+  <nav class="top-nav">
+    <button class="nav-icon-btn" onclick="history.back()">
+      <i class="fas fa-arrow-left" style="color:var(--blue)"></i>
+    </button>
+      <div class="nav-logo" style="font-size:1.1rem">
+        <div class="logo-lockup" style="align-items: center; gap:12px">
+          <div class="logo-icon"></div> <!-- CSS sets the image -->
+          <div class="logo-text">
+            <span>Add Listing</span>
+          </div>
+        </div>
+      </div>
+      
+  </nav>
+
+  <div style="height:var(--nav-height)"></div>
+
+
+  <!-- Filter bar -->
+  <div style="background:var(--teal-light);padding:8px 14px;display:flex;gap:8px;top:var(--nav-height);position:sticky;z-index:89;border-bottom:1px solid var(--border)">
+    <select id="quickCategory" class="input-field" style="flex:1;font-size:.82rem;padding:7px 10px">
+      <option value="">Category ▾</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Fashion">Fashion</option>
+      <option value="Furniture">Furniture</option>
+      <option value="Appliances">Appliances</option>
+      <option value="Vehicles">Vehicles</option>
+      <option value="Books">Books</option>
+      <option value="Other">Other</option>
+    </select>
+    <select id="quickLocation" class="input-field" style="flex:1;font-size:.82rem;padding:7px 10px">
+      <option value="">Location ▾</option>
+      <option value="Harare">Harare</option>
+      <option value="Bulawayo">Bulawayo</option>
+      <option value="Gweru">Gweru</option>
+      <option value="Mutare">Mutare</option>
+      <option value="Kadoma">Kadoma</option>
+      <option value="Masvingo">Masvingo</option>
+      <option value="Other">Other</option>
+    </select>
+  </div>
+
+  <form id="productForm" style="padding:14px 14px 120px">
+
+    <!-- Image upload zone -->
+    <div class="form-group">
+      <label>Images *</label>
+      <input type="file" id="imageInput" multiple accept="image/*" hidden>
+      <div class="image-upload-zone" id="uploadZone" onclick="document.getElementById('imageInput').click()">
+        <div class="upload-icon"><i class="fas fa-camera-retro"></i></div>
+        <p><strong>Tap to add photos</strong></p>
+        <p>First photo will be the cover. Max 10 photos.</p>
+      </div>
+      <div class="upload-preview-grid" id="previewGrid"></div>
+      <div id="uploadStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:6px"></div>
+    </div>
+
+    <!-- Product Name -->
+    <div class="form-group">
+      <label>Product Name *</label>
+      <input type="text" id="title" class="input-field" placeholder="e.g. iPhone 11 64GB" required maxlength="100">
+    </div>
+
+    <!-- Description -->
+    <div class="form-group">
+      <label>Description *</label>
+      <textarea id="description" class="input-field" rows="4"
+                placeholder="Describe your item — condition, age, any defects…" required maxlength="1000"></textarea>
+    </div>
+
+    <!-- Price & Condition -->
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Price ($) *</label>
+        <div class="input-with-icon">
+          <i class="fas fa-dollar-sign"></i>
+          <input type="number" id="price" class="input-field" placeholder="0.00" min="0" step="0.01" required>
+        </div>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Condition *</label>
+        <select id="condition" class="input-field" required>
+          <option value="">Select…</option>
+          <option value="New">New</option>
+          <option value="Like-New">Like-New</option>
+          <option value="Fair">Fair</option>
+          <option value="Needs Repair">Needs Repair</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Category & Location (synced from sticky bar) -->
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Category *</label>
+        <select id="category" class="input-field" required>
+          <option value="">Select…</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Fashion">Fashion</option>
+          <option value="Furniture">Furniture</option>
+          <option value="Appliances">Appliances</option>
+          <option value="Vehicles">Vehicles</option>
+          <option value="Books">Books</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Location *</label>
+        <input type="text" id="location" class="input-field" placeholder="City, Area" required>
+      </div>
+    </div>
+
+    <!-- Shipping -->
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <label class="toggle">
+        <input type="checkbox" id="shipping">
+        <span class="toggle-track"></span>
+      </label>
+      <span style="font-size:.9rem">Shipping available</span>
+    </div>
+
+    <!-- auth message -->
+    <div id="formMessage"></div>
+
+  </form>
+
+  <!-- Sticky submit button -->
+  <div class="detail-cta-bar">
+    <button type="button" class="btn btn-primary btn-block" id="submitBtn" onclick="submitForm()">
+      <i class="fas fa-tag"></i> <span id="submitLabel">Sell Now</span>
+    </button>
+  </div>
+
+</div>
+
+<script type="module">
+  import { supabaseClient } from '../Authentication/supabase.js';
+  import { checkAuth, handleError } from '../Authentication/utils.js';
+
+  // ── Storage bucket name ──────────────────────────────────────
+  // Change this one constant if you ever rename the bucket.
+  const IMAGES_BUCKET = 'product_images';
+
+  let currentUser = null;
+  let selectedFiles = [];
+  let editProductId = null;   // set when editing
+
+  // ── Boot ──
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await checkAuth();
+    if (!currentUser) { window.location.href = '../Authentication/login.html'; return; }
+
+    // Check if editing an existing product
+    const params = new URLSearchParams(window.location.search);
+    editProductId = params.get('edit');
+    if (editProductId) {
+      document.getElementById('pageHeading').textContent = 'Edit Listing';
+      document.getElementById('submitLabel').textContent = 'Save Changes';
+      await prefillForm(editProductId);
+    }
+
+    initImageUpload();
+    syncQuickSelects();
+  });
+
+  // ── Quick-select sticky bar syncs to hidden form fields ──
+  function syncQuickSelects() {
+    document.getElementById('quickCategory').addEventListener('change', (e) => {
+      document.getElementById('category').value = e.target.value;
+    });
+    document.getElementById('quickLocation').addEventListener('change', (e) => {
+      if (e.target.value && e.target.value !== 'Other') {
+        document.getElementById('location').value = e.target.value;
+      }
+    });
+    document.getElementById('category').addEventListener('change', (e) => {
+      document.getElementById('quickCategory').value = e.target.value;
+    });
+  }
+
+  // ── Prefill for edit mode ──
+  async function prefillForm(id) {
+    const { data, error } = await supabaseClient.from('products').select('*').eq('id', id).single();
+    if (error || data.seller_id !== currentUser.id) {
+      alert('Product not found or access denied.');
+      history.back();
+      return;
+    }
+    document.getElementById('title').value       = data.title        || '';
+    document.getElementById('description').value = data.description  || '';
+    document.getElementById('price').value       = data.price        || '';
+    document.getElementById('condition').value   = data.condition    || '';
+    document.getElementById('category').value    = data.category     || '';
+    document.getElementById('location').value    = data.location     || '';
+    document.getElementById('shipping').checked  = !!data.shipping_available;
+  }
+
+  // ── Image upload zone ──
+  function initImageUpload() {
+    const input = document.getElementById('imageInput');
+    const zone  = document.getElementById('uploadZone');
+
+    input.addEventListener('change', (e) => {
+      const newFiles = Array.from(e.target.files);
+      selectedFiles = [...selectedFiles, ...newFiles].slice(0, 10);
+      renderPreviews();
+    });
+
+    // Drag-and-drop
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', ()  => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      selectedFiles = [...selectedFiles, ...Array.from(e.dataTransfer.files)].slice(0, 10);
+      renderPreviews();
+    });
+  }
+
+  function renderPreviews() {
+    const grid = document.getElementById('previewGrid');
+    grid.innerHTML = selectedFiles.map((f, i) => `
+      <div class="preview-thumb-wrap">
+        <img src="${URL.createObjectURL(f)}" alt="Preview ${i+1}">
+        ${i === 0 ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(27,68,200,.7);color:#fff;font-size:.55rem;text-align:center;padding:2px;border-radius:0 0 6px 6px;font-weight:700">COVER</div>' : ''}
+        <button type="button" class="remove-thumb" onclick="removeImg(${i})">×</button>
+      </div>
+    `).join('');
+
+    document.getElementById('uploadStatus').textContent =
+      selectedFiles.length > 0 ? `${selectedFiles.length} photo${selectedFiles.length>1?'s':''} selected` : '';
+  }
+
+  window.removeImg = (idx) => {
+    selectedFiles.splice(idx, 1);
+    renderPreviews();
+  };
+
+  // ── Upload images to storage ──
+  async function uploadImages(productId) {
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file     = selectedFiles[i];
+      const filePath = `users/${currentUser.id}/${productId}/${Date.now()}_${file.name}`;
+
+      document.getElementById('uploadStatus').textContent = `Uploading image ${i+1} of ${selectedFiles.length}…`;
+
+      const { error: uploadError } = await supabaseClient.storage
+        .from(IMAGES_BUCKET)
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+      if (uploadError) throw new Error('Image upload failed: ' + uploadError.message);
+
+      // Store only the storage path — NOT the full public URL.
+      // The display URL is reconstructed at read time via getPublicUrl(filePath),
+      // so renaming the bucket only requires changing IMAGES_BUCKET above.
+      const { error: dbError } = await supabaseClient
+        .from('product_images')
+        .insert({ product_id: productId, image_url: filePath, image_order: i });
+
+      if (dbError) throw new Error('Failed to save image: ' + dbError.message);
+    }
+    document.getElementById('uploadStatus').textContent = '';
+  }
+
+  // ── Submit / update ──
+  window.submitForm = async () => {
+    const title       = document.getElementById('title').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const price       = parseFloat(document.getElementById('price').value);
+    const condition   = document.getElementById('condition').value;
+    const category    = document.getElementById('category').value;
+    const location    = document.getElementById('location').value.trim();
+    const shipping    = document.getElementById('shipping').checked;
+    const msgDiv      = document.getElementById('formMessage');
+    const btn         = document.getElementById('submitBtn');
+
+    // Validation
+    if (!title || !description || isNaN(price) || !condition || !category || !location) {
+      showMsg(msgDiv, 'Please fill in all required fields.', 'error');
+      return;
+    }
+    if (!editProductId && selectedFiles.length === 0) {
+      showMsg(msgDiv, 'Please add at least one photo.', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+    try {
+      const productData = { title, description, price, condition, category, location, shipping_available: shipping };
+
+      let productId = editProductId;
+
+      if (editProductId) {
+        // Update existing
+        const { error } = await supabaseClient
+          .from('products')
+          .update(productData)
+          .eq('id', editProductId)
+          .eq('seller_id', currentUser.id);
+        if (error) throw error;
+      } else {
+        // Insert new
+        const { data, error } = await supabaseClient
+          .from('products')
+          .insert({ ...productData, seller_id: currentUser.id })
+          .select('id')
+          .single();
+        if (error) throw error;
+        productId = data.id;
+      }
+
+      // Upload images
+      if (selectedFiles.length > 0) {
+        await uploadImages(productId);
+      }
+
+      showMsg(msgDiv, '✅ Listing saved!', 'success');
+      btn.innerHTML = '✅ Saved!';
+
+      setTimeout(() => {
+        window.location.href = `./product.html?id=${productId}`;
+      }, 1200);
+
+    } catch (err) {
+      console.error(err);
+      showMsg(msgDiv, '❌ ' + handleError(err, 'Save listing'), 'error');
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-tag"></i> ${editProductId ? 'Save Changes' : 'Sell Now'}`;
+    }
+  };
+
+  function showMsg(el, msg, type) {
+    el.innerHTML = `<div class="alert alert-${type}" style="margin-bottom:8px">${msg}</div>`;
+    if (type === 'success') setTimeout(() => { el.innerHTML = ''; }, 3000);
+  }
+</script>
+
+<!-- Desktop sidebar -->
+<script type="module" src="../Authentication/navigation.js"></script>
+
+<!-- PWA Service Worker -->
+<script>
+  if ('serviceWorker' in navigator)
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{}));
+</script>
+
+</body>
+</html>

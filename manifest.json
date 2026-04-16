@@ -1,0 +1,96 @@
+{
+  "name": "Metups — Buy & Sell Pre-owned Goods",
+  "short_name": "Metups",
+  "description": "The trusted marketplace for pre-owned goods. Buy, sell and meet up safely in your community.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4DD9C0",
+  "theme_color": "#4DD9C0",
+  "categories": ["shopping", "lifestyle"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icons/Metups_logo-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Metups_logo-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Metups_logo-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Metups_logo-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Metups_logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/Metups_logo-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/Metups_logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Metups home screen"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Browse Listings",
+      "short_name": "Browse",
+      "description": "See the latest listings near you",
+      "url": "/index.html",
+      "icons": [{ "src": "/icons/Metups_logo-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Sell an Item",
+      "short_name": "Sell",
+      "description": "List something for sale",
+      "url": "/Dashboard/add_product.html",
+      "icons": [{ "src": "/icons/Metups_logo-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "description": "Open your conversations",
+      "url": "/Messaging/messaging.html",
+      "icons": [{ "src": "/icons/Metups_logo-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

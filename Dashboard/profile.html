@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>My Profile — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../Authentication/styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Top Nav -->
+  <nav class="top-nav">
+    <button class="nav-icon-btn" onclick="history.back()">
+      <i class="fas fa-arrow-left" style="color:var(--blue)"></i>
+    </button>
+      <div class="nav-logo" style="font-size:1.1rem">
+          <div class="logo-text" style="font-weight: 600;">
+            <span>My Profile</span>
+          </div>
+      </div>
+    <button class="nav-icon-btn" id="editToggleBtn" onclick="toggleEdit()">
+      <i class="fas fa-pen" style="color:var(--blue)"></i>
+    </button>
+  </nav>
+
+  <div style="height:var(--nav-height)"></div>
+
+  <!-- Cover gradient -->
+  <div class="profile-cover"></div>
+
+  <!-- Avatar -->
+  <div class="profile-avatar-wrap">
+    <div class="profile-avatar-lg" id="avatarDisplay">
+      <span id="avatarInitials">?</span>
+    </div>
+    <button class="profile-camera-btn" onclick="document.getElementById('avatarInput').click()">
+      <i class="fas fa-camera"></i>
+    </button>
+    <input type="file" id="avatarInput" accept="image/*" hidden>
+  </div>
+
+  <!-- Name & email -->
+  <div class="profile-name" id="profileName">Loading…</div>
+  <div class="profile-email" id="profileEmail"></div>
+
+  <!-- Stats row -->
+  <div style="display:flex;justify-content:center;gap:32px;padding:12px 16px;margin:0 12px;background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-top:12px">
+    <div style="text-align:center">
+      <div style="font-family:var(--font-head);font-weight:900;font-size:1.2rem;color:var(--blue)" id="statListings">0</div>
+      <div style="font-size:.72rem;color:var(--text-muted)">Listings</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-family:var(--font-head);font-weight:900;font-size:1.2rem;color:var(--green)" id="statSold">0</div>
+      <div style="font-size:.72rem;color:var(--text-muted)">Sold</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-family:var(--font-head);font-weight:900;font-size:1.2rem;color:var(--orange)" id="statRating">—</div>
+      <div style="font-size:.72rem;color:var(--text-muted)">Rating</div>
+    </div>
+  </div>
+
+  <!-- Personal Details (view mode) -->
+  <div class="profile-section" id="viewMode">
+    <div class="profile-section-title">
+      Personal Details
+      <button class="btn btn-sm btn-outline" style="padding:4px 12px;font-size:.72rem" onclick="toggleEdit()">
+        <i class="fas fa-pen"></i> Edit
+      </button>
+    </div>
+    <div class="profile-detail-row">
+      <i class="fas fa-map-marker-alt"></i>
+      <span id="viewLocation">Not set</span>
+    </div>
+    <div class="profile-detail-row">
+      <i class="fas fa-birthday-cake"></i>
+      <span id="viewDob">Not set</span>
+    </div>
+    <div class="profile-detail-row">
+      <i class="fas fa-phone"></i>
+      <span id="viewPhone">Not set</span>
+    </div>
+    <div class="profile-detail-row" style="align-items:flex-start">
+      <i class="fas fa-info-circle" style="margin-top:2px"></i>
+      <span id="viewBio" style="white-space:pre-wrap">Not set</span>
+    </div>
+  </div>
+
+  <!-- Edit Mode -->
+  <div class="profile-section" id="editMode" style="display:none">
+    <div class="profile-section-title">Edit Details</div>
+
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="editName" class="input-field" placeholder="Your full name">
+    </div>
+    <div class="form-group">
+      <label>City / Location</label>
+      <input type="text" id="editLocation" class="input-field" placeholder="e.g. Harare">
+    </div>
+    <div class="form-group">
+      <label>Date of Birth</label>
+      <input type="date" id="editDob" class="input-field">
+    </div>
+    <div class="form-group">
+      <label>Phone Number</label>
+      <input type="tel" id="editPhone" class="input-field" placeholder="+263 77 123 4567">
+    </div>
+    <div class="form-group">
+      <label>Bio</label>
+      <textarea id="editBio" class="input-field" rows="3" placeholder="Tell buyers about yourself…"></textarea>
+    </div>
+
+    <div id="profileMsg"></div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="toggleEdit()" style="flex:1">Discard</button>
+      <button class="btn btn-primary" onclick="saveProfile()" style="flex:2" id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <div style="height:20px"></div>
+</div>
+
+<script type="module">
+  import { supabaseClient } from '../Authentication/supabase.js';
+  import { checkAuth, getAvatarInitials, formatDate } from '../Authentication/utils.js';
+
+  let currentUser = null;
+  let profile = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await checkAuth();
+    if (!currentUser) { window.location.href = '../Authentication/login.html'; return; }
+    await loadProfile();
+    initAvatarUpload();
+  });
+
+  async function loadProfile() {
+    const { data } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
+    profile = data || {};
+
+    // Render name / email
+    document.getElementById('profileName').textContent  = profile.full_name || currentUser.email;
+    document.getElementById('profileEmail').textContent = profile.email || currentUser.email;
+
+    // Avatar
+    const initials = getAvatarInitials(profile.full_name || currentUser.email || 'U');
+    document.getElementById('avatarInitials').textContent = initials;
+    if (profile.avatar_url) {
+      document.getElementById('avatarDisplay').innerHTML =
+        `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover">`;
+    }
+
+    // Stats
+    const { count: listCount } = await supabaseClient.from('products')
+      .select('*', { count:'exact', head:true }).eq('seller_id', currentUser.id).eq('is_active', true);
+    const { count: soldCount } = await supabaseClient.from('products')
+      .select('*', { count:'exact', head:true }).eq('seller_id', currentUser.id).eq('sold', true);
+
+    document.getElementById('statListings').textContent = listCount || 0;
+    document.getElementById('statSold').textContent     = soldCount || 0;
+    document.getElementById('statRating').textContent   = profile.rating_avg
+      ? `⭐ ${parseFloat(profile.rating_avg).toFixed(1)}`
+      : '—';
+
+    // View mode fields
+    document.getElementById('viewLocation').textContent = profile.location  || 'Not set';
+    document.getElementById('viewDob').textContent      = profile.date_of_birth ? formatDate(profile.date_of_birth) : 'Not set';
+    document.getElementById('viewPhone').textContent    = profile.phone     || 'Not set';
+    document.getElementById('viewBio').textContent      = profile.bio       || 'Not set';
+  }
+
+  window.toggleEdit = () => {
+    const editing = document.getElementById('editMode').style.display !== 'none';
+    document.getElementById('viewMode').style.display  = editing ? 'block' : 'none';
+    document.getElementById('editMode').style.display  = editing ? 'none'  : 'block';
+    if (!editing && profile) {
+      // Prefill edit fields
+      document.getElementById('editName').value     = profile.full_name     || '';
+      document.getElementById('editLocation').value = profile.location      || '';
+      document.getElementById('editDob').value      = profile.date_of_birth || '';
+      document.getElementById('editPhone').value    = profile.phone         || '';
+      document.getElementById('editBio').value      = profile.bio           || '';
+    }
+  };
+
+  window.saveProfile = async () => {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const updates = {
+      full_name:      document.getElementById('editName').value.trim(),
+      location:       document.getElementById('editLocation').value.trim(),
+      date_of_birth:  document.getElementById('editDob').value || null,
+      phone:          document.getElementById('editPhone').value.trim() || null,
+      bio:            document.getElementById('editBio').value.trim() || null,
+      updated_at:     new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient.from('profiles').update(updates).eq('id', currentUser.id);
+
+    btn.disabled = false;
+    btn.textContent = 'Save';
+
+    if (error) {
+      document.getElementById('profileMsg').innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+      return;
+    }
+
+    await loadProfile();
+    toggleEdit();
+  };
+
+  function initAvatarUpload() {
+    document.getElementById('avatarInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const ext  = file.name.split('.').pop();
+      const path = `avatars/${currentUser.id}.${ext}`;
+
+      const { error: upErr } = await supabaseClient.storage.from('avatars').upload(path, file, { upsert: true });
+      if (upErr) { alert('Upload failed: ' + upErr.message); return; }
+
+      const { data } = supabaseClient.storage.from('avatars').getPublicUrl(path);
+      await supabaseClient.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', currentUser.id);
+
+      document.getElementById('avatarDisplay').innerHTML =
+        `<img src="${data.publicUrl}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`;
+    });
+  }
+</script>
+</body>
+</html>

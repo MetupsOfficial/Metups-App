@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Saved Items — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../Authentication/styles.css">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#4DD9C0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Metups">
+  <link rel="apple-touch-icon" href="/icons/Metups_logo-192.png">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Nav -->
+  <nav class="top-nav">
+    <button class="nav-icon-btn" onclick="history.back()">
+      <i class="fas fa-arrow-left" style="color:var(--blue)"></i>
+    </button>
+    <div class="nav-logo" style="font-size:1.1rem">
+      <div class="nav-logo" style="font-size:1.1rem">
+        <div class="logo-lockup" style="align-items: center; gap:12px">
+          <div class="logo-icon"></div> <!-- CSS sets the image -->
+        </div>
+      </div>
+      Saved &amp; Wanted
+    </div>
+    <a href="./add_wishlist.html" class="nav-icon-btn" title="Add want request">
+      <i class="fas fa-plus" style="color:var(--blue)"></i>
+    </a>
+  </nav>
+
+  <div style="height:var(--nav-height)"></div>
+
+
+  <!-- Tab bar -->
+  <div style="display:flex;background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:var(--nav-height);z-index:90">
+    <button class="tab-btn active" id="tabSaved" onclick="switchTab('saved')">
+      <i class="fas fa-heart"></i> Saved
+    </button>
+    <button class="tab-btn" id="tabWanted" onclick="switchTab('wanted')">
+      <i class="fas fa-search"></i> Want Alerts
+    </button>
+  </div>
+
+<!-- SAVED ITEMS tab -->
+<div id="panelSaved">
+  <div class="product-grid" id="savedGrid" style="padding-top:14px"></div>
+</div>
+
+<script>
+document.getElementById("savedGrid").innerHTML = [1,2,3,4].map(() => `
+  <div class="product-card">
+    <div class="product-card-img skeleton" style="aspect-ratio:1;border-radius:0"></div>
+    <div class="product-card-body">
+      <div class="skeleton" style="height:13px;width:55%;margin-bottom:6px"></div>
+      <div class="skeleton" style="height:11px;width:75%;margin-bottom:4px"></div>
+      <div class="skeleton" style="height:10px;width:45%"></div>
+    </div>
+  </div>
+`).join('');
+</script>
+
+    <div id="savedEmpty" class="empty-state" style="display:none">
+      <i class="fas fa-heart-broken"></i>
+      <h3>No saved items</h3>
+      <p>Tap the ♡ on any listing to save it here for later.</p>
+      <a href="../index.html" class="btn btn-primary" style="margin-top:16px">Browse Listings</a>
+    </div>
+  
+
+  <!-- WANT ALERTS tab -->
+  <div id="panelWanted" style="display:none">
+    <div id="wantedList" style="padding:10px 10px 0">
+      <!-- Items injected here -->
+    </div>
+    <div id="wantedEmpty" class="empty-state" style="display:none">
+      <i class="fas fa-search"></i>
+      <h3>No want alerts</h3>
+      <p>Tell us what you're looking for and we'll notify you when it's listed.</p>
+      <a href="./add_wishlist.html" class="btn btn-primary" style="margin-top:16px">
+        <i class="fas fa-plus"></i> Add Request
+      </a>
+    </div>
+  </div>
+
+  <!-- FAB — add want request (visible on Wanted tab) -->
+  <a href="./add_wishlist.html" class="fab" id="wantedFab" style="display:none" title="Add want request">
+    <i class="fas fa-plus"></i>
+  </a>
+
+</div>
+
+<style>
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-bottom: 3px solid transparent;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+.tab-btn:hover  { color: var(--text); }
+
+.want-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+}
+.want-card-title { font-family: var(--font-head); font-weight: 800; font-size: .95rem; margin-bottom: 4px; }
+.want-card-desc  { font-size: .82rem; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
+.want-meta       { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.want-tag        { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 3px 9px; }
+.want-actions    { display: flex; gap: 8px; }
+</style>
+
+<script type="module">
+  import { supabaseClient } from '../Authentication/supabase.js';
+  const IMAGES_BUCKET = 'product_images';
+  import { checkAuth, formatCurrency, getCategoryIcon } from '../Authentication/utils.js';
+
+  let currentUser = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await checkAuth();
+    if (!currentUser) { window.location.href = '../Authentication/login.html'; return; }
+
+    await loadSaved();
+  });
+
+  // ── TAB SWITCH ──
+  window.switchTab = (tab) => {
+    const isSaved = tab === 'saved';
+    document.getElementById('tabSaved').classList.toggle('active', isSaved);
+    document.getElementById('tabWanted').classList.toggle('active', !isSaved);
+    document.getElementById('panelSaved').style.display  = isSaved ? 'block' : 'none';
+    document.getElementById('panelWanted').style.display = isSaved ? 'none'  : 'block';
+    document.getElementById('wantedFab').style.display   = isSaved ? 'none'  : 'flex';
+    if (!isSaved) loadWanted();
+  };
+
+  // ── SAVED ITEMS (product_id is set) ──
+  async function loadSaved() {
+    const { data, error } = await supabaseClient
+      .from('wishlists')
+      .select(`
+        id,
+        product_id,
+        product:products(id, title, price, condition, location, category, sold,
+          product_images(image_url, image_order))
+      `)
+      .eq('user_id', currentUser.id)
+      .not('product_id', 'is', null)
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+
+    const grid = document.getElementById('savedGrid');
+
+    if (error || !data || data.length === 0) {
+      grid.innerHTML = '';
+      document.getElementById('savedEmpty').style.display = 'block';
+      return;
+    }
+
+    grid.innerHTML = data.map(row => {
+      const p    = row.product;
+      if (!p) return '';
+      const imgs = (p.product_images || []).sort((a,b) => (a.image_order||0)-(b.image_order||0));
+      // image_url is a storage path — reconstruct the full public URL
+      const _raw = imgs[0]?.image_url ?? null;
+      const img  = _raw
+        ? supabaseClient.storage.from(IMAGES_BUCKET).getPublicUrl(_raw).data.publicUrl
+        : null;
+      const icon = getCategoryIcon(p.category);
+
+      return `
+        <div class="product-card" onclick="window.location.href='./product.html?id=${p.id}'">
+          <div class="product-card-img">
+            ${img
+              ? `<img src="${img}" alt="${esc(p.title)}" loading="lazy"
+                     onerror="this.parentElement.innerHTML='<i class=\\'fas fa-${icon} img-placeholder\\'></i>'">`
+              : `<i class="fas fa-${icon} img-placeholder"></i>`
+            }
+          </div>
+          ${p.sold ? '<div class="sold-overlay">SOLD</div>' : ''}
+          <button class="card-heart saved" onclick="unsave(event,'${row.id}')" title="Remove from saved">
+            <i class="fas fa-heart"></i>
+          </button>
+          <div class="product-card-body">
+            <div class="card-price">${formatCurrency(p.price)}</div>
+            <div class="card-title">${esc(p.title)}</div>
+            <div class="card-meta">${esc(p.location||'')} · ${esc(p.condition||'')}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ── UNSAVE ──
+  window.unsave = async (e, wishlistId) => {
+    e.stopPropagation();
+    const { error } = await supabaseClient.from('wishlists').delete().eq('id', wishlistId);
+    if (!error) await loadSaved();
+  };
+
+  // ── WANT ALERTS (product_id is null, has title) ──
+  async function loadWanted() {
+    const { data, error } = await supabaseClient
+      .from('wishlists')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .is('product_id', null)
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+
+    const list = document.getElementById('wantedList');
+
+    if (error || !data || data.length === 0) {
+      list.innerHTML = '';
+      document.getElementById('wantedEmpty').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('wantedEmpty').style.display = 'none';
+
+    list.innerHTML = data.map(w => `
+      <div class="want-card" id="want-${w.id}">
+        <div class="want-card-title">${esc(w.title || 'Untitled')}</div>
+        <div class="want-card-desc">${esc(w.description || '')}</div>
+        <div class="want-meta">
+          ${w.max_price    ? `<span class="want-tag"><i class="fas fa-dollar-sign" style="color:var(--green)"></i> Budget: ${formatCurrency(w.max_price)}</span>` : ''}
+          ${w.category     ? `<span class="want-tag"><i class="fas fa-tag" style="color:var(--blue)"></i> ${esc(w.category)}</span>` : ''}
+          ${w.condition    ? `<span class="want-tag"><i class="fas fa-star" style="color:var(--yellow)"></i> ${esc(w.condition)}</span>` : ''}
+          ${w.location     ? `<span class="want-tag"><i class="fas fa-map-marker-alt" style="color:var(--teal-dark)"></i> ${esc(w.location)}</span>` : ''}
+          <span class="want-tag"><i class="fas fa-truck" style="color:var(--orange)"></i> ${w.shipping_ok ? 'Shipping OK' : 'Local only'}</span>
+        </div>
+        <div class="want-actions">
+          <a href="./add_wishlist.html?id=${w.id}" class="btn btn-outline btn-sm">
+            <i class="fas fa-pen"></i> Edit
+          </a>
+          <button class="btn btn-danger btn-sm" onclick="stopAlert('${w.id}')">
+            <i class="fas fa-bell-slash"></i> Stop Alert
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.stopAlert = async (id) => {
+    if (!confirm('Stop notifications for this request?')) return;
+    const { error } = await supabaseClient.from('wishlists').update({ active: false }).eq('id', id);
+    if (!error) {
+      document.getElementById(`want-${id}`)?.remove();
+      // Check if list is now empty
+      const remaining = document.querySelectorAll('[id^="want-"]');
+      if (remaining.length === 0) {
+        document.getElementById('wantedEmpty').style.display = 'block';
+      }
+    }
+  };
+
+  function esc(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+
+<!-- Desktop sidebar -->
+<script type="module" src="../Authentication/navigation.js"></script>
+
+<!-- PWA Service Worker -->
+<script>
+  if ('serviceWorker' in navigator)
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{}));
+</script>
+
+</body>
+</html>
