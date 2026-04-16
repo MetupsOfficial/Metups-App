@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Confirm Account — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="nav-logo" style="font-size:1.1rem">
+        <div class="logo-lockup" style="align-items: center; gap:12px">
+          <div class="logo-icon" style="width: 50px; height: 50px;" ></div> <!-- CSS sets the image -->
+        </div>
+      </div>
+      <h1>Metups</h1>
+      <p>Check your email for a 6-digit confirmation code</p>
+    </div>
+
+    <!-- Email display (read-only) -->
+    <div class="form-group">
+      <label>Email Address</label>
+      <div class="input-with-icon">
+        <i class="fas fa-envelope"></i>
+        <input type="email" id="emailDisplay" class="input-field" readonly
+               style="background:var(--bg);cursor:default;color:var(--text-muted)">
+      </div>
+    </div>
+
+    <!-- OTP boxes -->
+    <div class="form-group">
+      <label>Confirmation Code</label>
+      <div class="otp-row" id="otpRow">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]">
+      </div>
+    </div>
+
+    <div id="authMessage"></div>
+
+    <button class="btn btn-primary btn-block" id="confirmBtn" onclick="handleConfirm()">
+      <i class="fas fa-check-circle"></i> Confirm Account
+    </button>
+
+    <div style="text-align:center;margin-top:16px;font-size:0.85rem;color:var(--text-muted)">
+      Didn't receive it?
+      <button id="resendBtn" onclick="handleResend()"
+              style="color:var(--blue);font-weight:700;background:none;border:none;cursor:pointer;font-size:0.85rem">
+        Resend Code
+      </button>
+    </div>
+
+    <div class="auth-footer-link" style="margin-top:12px">
+      <a href="./login.html"><i class="fas fa-arrow-left" style="font-size:.75rem"></i> Back to Login</a>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  import { supabaseClient } from './supabase.js';
+  import { handleError } from './utils.js';
+
+  // ── Pre-fill email from URL or localStorage ──
+  const params = new URLSearchParams(window.location.search);
+  const email  = params.get('email') || localStorage.getItem('signupEmail') || '';
+  document.getElementById('emailDisplay').value = email;
+
+  // ── OTP box keyboard handling ──
+  const boxes = document.querySelectorAll('.otp-box');
+
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val;
+      if (val && i < boxes.length - 1) boxes[i + 1].focus();
+      checkAllFilled();
+    });
+
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) {
+        boxes[i - 1].focus();
+      }
+    });
+
+    box.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+      pasted.split('').forEach((ch, j) => {
+        if (boxes[j]) boxes[j].value = ch;
+      });
+      if (boxes[pasted.length - 1]) boxes[pasted.length - 1].focus();
+      checkAllFilled();
+    });
+  });
+
+  function checkAllFilled() {
+    const code = getCode();
+    if (code.length === 6) handleConfirm();
+  }
+
+  function getCode() {
+    return Array.from(boxes).map(b => b.value).join('');
+  }
+
+  // ── Confirm ──
+  window.handleConfirm = async () => {
+    const code  = getCode();
+    const msg   = document.getElementById('authMessage');
+    const btn   = document.getElementById('confirmBtn');
+
+    if (code.length !== 6) {
+      showMsg(msg, 'Please enter the full 6-digit code.', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying…';
+
+    // Supabase email OTP verification
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      email,
+      token: code,
+      type:  'signup'
+    });
+
+    if (error) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm Account';
+      boxes.forEach(b => { b.value = ''; b.classList.add('is-error'); });
+      showMsg(msg, error.message.includes('expired') ? 'Code expired — please request a new one.' : 'Invalid code. Try again.', 'error');
+      boxes[0].focus();
+      return;
+    }
+
+    // Clear stored email
+    localStorage.removeItem('signupEmail');
+
+    showMsg(msg, '✅ Account confirmed! Redirecting…', 'success');
+    btn.innerHTML = '✅ Confirmed!';
+
+    setTimeout(() => { window.location.href = '../index.html'; }, 1500);
+  };
+
+  // ── Resend ──
+  window.handleResend = async () => {
+    const resendBtn = document.getElementById('resendBtn');
+    const msg       = document.getElementById('authMessage');
+
+    if (!email) { showMsg(msg, 'No email found. Please sign up again.', 'error'); return; }
+
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Sending…';
+
+    const { error } = await supabaseClient.auth.resend({ type: 'signup', email });
+
+    if (error) {
+      showMsg(msg, handleError(error), 'error');
+    } else {
+      showMsg(msg, 'New code sent! Check your inbox.', 'success');
+    }
+
+    // Cooldown 30s
+    let sec = 30;
+    const interval = setInterval(() => {
+      sec--;
+      resendBtn.textContent = `Resend (${sec}s)`;
+      if (sec <= 0) {
+        clearInterval(interval);
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend Code';
+      }
+    }, 1000);
+  };
+
+  function showMsg(el, text, type) {
+    el.innerHTML = `<div class="alert alert-${type}" style="margin-bottom:8px">${text}</div>`;
+    if (type === 'success') setTimeout(() => { el.innerHTML = ''; }, 4000);
+  }
+
+  // Focus first box on load
+  boxes[0].focus();
+</script>
+</body>
+</html>

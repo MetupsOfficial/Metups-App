@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Want Alert — Metups</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="../Authentication/styles.css">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#4DD9C0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Metups">
+  <link rel="apple-touch-icon" href="/icons/Metups_logo-192.png">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Nav -->
+  <nav class="top-nav">
+    <button class="nav-icon-btn" onclick="history.back()">
+      <i class="fas fa-arrow-left" style="color:var(--blue)"></i>
+    </button>
+    <div class="nav-logo" style="font-size:1.1rem" id="pageTitle">Want Alert</div>
+    <div style="width:40px"></div>
+  </nav>
+
+  <div style="height:var(--nav-height)"></div>
+
+
+  <!-- Intro strip -->
+  <div style="background:var(--teal-light);padding:12px 16px 10px;border-bottom:1px solid var(--teal-mid)">
+    <p style="font-size:.82rem;color:var(--text-muted);line-height:1.5">
+      <i class="fas fa-bell" style="color:var(--blue);margin-right:4px"></i>
+      Describe what you're looking for. We'll notify you by email when a matching item is listed.
+    </p>
+  </div>
+
+  <form id="wantForm" style="padding:16px 14px 120px">
+
+    <!-- Title -->
+    <div class="form-group">
+      <label>Item Title *</label>
+      <input type="text" id="title" class="input-field"
+             placeholder="e.g. iPhone 13 Pro Max, Toyota Hilux…" required maxlength="100">
+    </div>
+
+    <!-- Description -->
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="description" class="input-field" rows="3"
+                placeholder="Add any specific details — storage size, colour, year, mileage…" maxlength="500"></textarea>
+    </div>
+
+    <!-- Budget & Condition -->
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Max Budget ($)</label>
+        <div class="input-with-icon">
+          <i class="fas fa-dollar-sign"></i>
+          <input type="number" id="maxPrice" class="input-field" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Condition</label>
+        <select id="condition" class="input-field">
+          <option value="">Any</option>
+          <option value="New">New</option>
+          <option value="Like-New">Like-New</option>
+          <option value="Fair">Fair</option>
+          <option value="Needs Repair">Needs Repair</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Category & Location -->
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1">
+        <label>Category</label>
+        <select id="category" class="input-field">
+          <option value="">Any</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Fashion">Fashion</option>
+          <option value="Furniture">Furniture</option>
+          <option value="Appliances">Appliances</option>
+          <option value="Vehicles">Vehicles</option>
+          <option value="Books">Books</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>Preferred Location</label>
+        <input type="text" id="location" class="input-field" placeholder="City or Anywhere">
+      </div>
+    </div>
+
+    <!-- Shipping toggle -->
+    <div class="form-group" style="flex-direction:row;align-items:center;gap:10px">
+      <label class="toggle">
+        <input type="checkbox" id="shippingOk">
+        <span class="toggle-track"></span>
+      </label>
+      <span style="font-size:.9rem">I accept items with shipping</span>
+    </div>
+
+    <div id="formMsg"></div>
+
+  </form>
+
+  <!-- Sticky CTA -->
+  <div class="detail-cta-bar">
+    <button class="btn btn-primary btn-block" onclick="saveAlert()" id="saveBtn">
+      <i class="fas fa-bell"></i> <span id="saveBtnLabel">Save Alert</span>
+    </button>
+  </div>
+
+</div>
+
+<script type="module">
+  import { supabaseClient } from '../Authentication/supabase.js';
+  import { checkAuth, handleError } from '../Authentication/utils.js';
+
+  let currentUser = null;
+  let editId      = null;
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    currentUser = await checkAuth();
+    if (!currentUser) { window.location.href = '../Authentication/login.html'; return; }
+
+    const params = new URLSearchParams(window.location.search);
+    editId = params.get('id');
+
+    if (editId) {
+      document.getElementById('pageTitle').textContent     = 'Edit Alert';
+      document.getElementById('saveBtnLabel').textContent  = 'Save Changes';
+      await prefill(editId);
+    }
+  });
+
+  async function prefill(id) {
+    const { data, error } = await supabaseClient
+      .from('wishlists')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', currentUser.id)
+      .single();
+
+    if (error || !data) { history.back(); return; }
+
+    document.getElementById('title').value       = data.title        || '';
+    document.getElementById('description').value = data.description  || '';
+    document.getElementById('maxPrice').value    = data.max_price    || '';
+    document.getElementById('condition').value   = data.condition    || '';
+    document.getElementById('category').value    = data.category     || '';
+    document.getElementById('location').value    = data.location     || '';
+    document.getElementById('shippingOk').checked = !!data.shipping_ok;
+  }
+
+  window.saveAlert = async () => {
+    const title     = document.getElementById('title').value.trim();
+    const msgDiv    = document.getElementById('formMsg');
+    const btn       = document.getElementById('saveBtn');
+
+    if (!title) { showMsg(msgDiv, 'Please enter an item title.', 'error'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+    const payload = {
+      title,
+      description:  document.getElementById('description').value.trim() || null,
+      max_price:    parseFloat(document.getElementById('maxPrice').value) || null,
+      condition:    document.getElementById('condition').value            || null,
+      category:     document.getElementById('category').value            || null,
+      location:     document.getElementById('location').value.trim()     || 'Anywhere',
+      shipping_ok:  document.getElementById('shippingOk').checked,
+      user_id:      currentUser.id,
+      active:       true,
+      product_id:   null  /* this is a want-ad, not a saved product */
+    };
+
+    let error;
+
+    if (editId) {
+      ({ error } = await supabaseClient.from('wishlists').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await supabaseClient.from('wishlists').insert(payload));
+    }
+
+    if (error) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-bell"></i> ${editId ? 'Save Changes' : 'Save Alert'}`;
+      showMsg(msgDiv, handleError(error, 'Save alert'), 'error');
+      return;
+    }
+
+    showMsg(msgDiv, "✅ Alert saved! We'll notify you when a match is found.", 'success');
+    btn.innerHTML = '✅ Saved!';
+
+    setTimeout(() => { window.location.href = './wishlist.html'; }, 1200);
+  };
+
+  function showMsg(el, msg, type) {
+    el.innerHTML = `<div class="alert alert-${type}" style="margin-bottom:8px">${msg}</div>`;
+    if (type === 'success') setTimeout(() => { el.innerHTML = ''; }, 4000);
+  }
+</script>
+
+<!-- Desktop sidebar -->
+<script type="module" src="../Authentication/navigation.js"></script>
+
+<!-- PWA Service Worker -->
+<script>
+  if ('serviceWorker' in navigator)
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{}));
+</script>
+
+</body>
+</html>
