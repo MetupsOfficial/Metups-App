@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="./styles.css">
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="../manifest.json">
   <meta name="theme-color" content="#4DD9C0">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Metups">
-  <link rel="apple-touch-icon" href="/icons/Metups_logo-192.png">
+  <link rel="apple-touch-icon" href="../icons/Metups_logo-192.png">
 </head>
 <body>
 <div class="auth-page">
@@ -222,12 +222,31 @@
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account…';
 
-    // Create auth user
-    // NOTE: When email confirmation is ON, Supabase sends a verification
-    // email via its built-in service. The free tier allows only 2 emails/hour.
-    // If you hit that limit, configure a custom SMTP provider in:
-    //   Supabase Dashboard → Authentication → Email → SMTP Settings
-    //   (use Resend or any SMTP provider — it's free)
+    // ── Step 1: Pre-check if email already exists ────────────────────
+    // Query the profiles table (publicly readable) before calling signUp.
+    // This gives an immediate, clear error instead of the vague Supabase
+    // "already registered" response (or silent empty identities[]).
+    const { data: existingProfile } = await supabaseClient
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingProfile) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+      showMsg(msgDiv,
+        '⚠️ An account with this email already exists. ' +
+        '<a href="./login.html" style="color:var(--blue);font-weight:700;text-decoration:underline">Log in instead?</a>',
+        'error');
+      return;
+    }
+
+    // ── Step 2: Create auth user ──────────────────────────────────────
+    // When email confirmation is ON, Supabase sends a verification email.
+    // The free tier allows only 2 emails/hour — configure a custom SMTP
+    // provider in Supabase → Authentication → Email Settings to remove
+    // this limit (Resend is free and works perfectly).
     let data, error;
     try {
       ({ data, error } = await supabaseClient.auth.signUp({
@@ -236,17 +255,26 @@
         options: { data: { full_name: fullName } }
       }));
     } catch (fetchErr) {
-      // AuthRetryableFetchError with email confirmation ON means Supabase
-      // could not send the confirmation email. Most common cause: the free
-      // tier email rate limit (2 emails/hour) has been hit. Fix: configure
-      // a custom SMTP provider in Supabase → Auth → Email settings.
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
       showMsg(msgDiv,
-        '⚠️ Signup failed while trying to send your confirmation email. ' +
-        'This is usually Supabases free email limit (2 emails/hour). ' +
-        'Please wait an hour and try again, or ask the site admin to configure ' +
-        'a custom email provider in Supabase → Authentication → Email Settings.',
+        '⚠️ Could not send your confirmation email. ' +
+        'This usually means the hourly email limit (2/hour on free tier) has been hit. ' +
+        'Please wait an hour and try again.',
+        'error');
+      return;
+    }
+
+    // ── Step 3: Handle API-level errors ──────────────────────────────
+    // Supabase sometimes returns data.user with identities:[] instead of
+    // an error when the email exists — this is the "silent duplicate" case.
+    const silentDuplicate = data?.user && !error && data.user.identities?.length === 0;
+    if (silentDuplicate) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+      showMsg(msgDiv,
+        '⚠️ An account with this email already exists. ' +
+        '<a href="./login.html" style="color:var(--blue);font-weight:700;text-decoration:underline">Log in instead?</a>',
         'error');
       return;
     }
@@ -254,26 +282,23 @@
     if (error) {
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
-
       let msg;
       if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-        msg = 'An account with this email already exists. <a href="./login.html" style="color:var(--blue);font-weight:700">Log in instead?</a>';
+        msg = '⚠️ An account with this email already exists. <a href="./login.html" style="color:var(--blue);font-weight:700;text-decoration:underline">Log in instead?</a>';
       } else if (error.message?.includes('rate limit') || error.message?.includes('Rate limit')) {
-        msg = '⚠️ Email rate limit hit. Supabase free tier allows 2 confirmation emails/hour. Wait and try again, or configure a custom SMTP provider.';
+        msg = '⚠️ Too many signup attempts. Please wait a few minutes and try again.';
       } else if (error.message?.includes('Invalid email')) {
-        msg = 'That email address is not valid.';
+        msg = '⚠️ That email address is not valid.';
       } else if (error.message?.includes('Password should be')) {
-        msg = 'Password is too weak. Use at least 8 characters.';
-      } else if (error.message?.includes('smtp') || error.message?.includes('SMTP') || error.message?.includes('email')) {
-        msg = '⚠️ Could not send confirmation email. Configure a custom SMTP provider in Supabase → Authentication → Email Settings.';
+        msg = '⚠️ Password is too weak — use at least 8 characters.';
       } else {
-        msg = handleError(error, 'Signup');
+        msg = '⚠️ ' + handleError(error, 'Signup');
       }
       showMsg(msgDiv, msg, 'error');
       return;
     }
 
-    // data.user exists but data.session is null → email confirmation required
+    // data.session = null → email confirmation required
     // data.session exists → auto-confirmed (confirmation off)
     const needsConfirmation = data?.user && !data?.session;
 

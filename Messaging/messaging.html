@@ -104,6 +104,14 @@
       <a href="#" id="chatProductLink" style="margin-left:auto;font-size:.72rem;color:var(--blue);font-weight:700">View ›</a>
     </div>
 
+    <!-- Error banner (upload/send failures) -->
+    <div id="chatErrorBanner" style="
+      display:none;position:sticky;top:0;z-index:20;
+      background:var(--red-light);color:var(--red-dark);
+      border-bottom:1px solid var(--red);
+      padding:8px 14px;font-size:.82rem;font-weight:600;
+    "></div>
+
     <!-- Messages -->
     <div class="chat-messages" id="chatMessages" style="margin-top:calc(var(--nav-height) + 64px)">
       <!-- Injected messages -->
@@ -142,7 +150,28 @@
   import { checkAuth, formatCurrency, getAvatarInitials, formatDate } from '../Authentication/utils.js';
 
   // ── Storage bucket name (change here if you rename the bucket) ──
-  const IMAGES_BUCKET = 'product_images';
+  const IMAGES_BUCKET   = 'product_images';   // public bucket — use getPublicUrl
+  const MESSAGES_BUCKET = 'messages';           // PRIVATE bucket — must use signed URLs
+
+  // Generate a 1-hour signed URL for a file in the private messages bucket.
+  // getPublicUrl() returns a broken URL for private buckets — always use this instead.
+  async function signedMediaUrl(path) {
+    const { data, error } = await supabaseClient.storage
+      .from(MESSAGES_BUCKET)
+      .createSignedUrl(path, 3600); // 1-hour expiry
+    if (error) { console.warn('[signedMediaUrl]', error.message); return null; }
+    return data.signedUrl;
+  }
+
+  // Show an error banner inside the chat that dismisses after 5 seconds.
+  function showChatError(msg) {
+    const el = document.getElementById('chatErrorBanner');
+    if (!el) { alert(msg); return; } // fallback if banner not in DOM
+    el.textContent = '⚠ ' + msg;
+    el.style.display = 'block';
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
 
   // ──────────────────────────────────────
   // STATE
@@ -216,7 +245,7 @@
       const other = currentUser.id === c.buyer_id ? c.seller : c.buyer;
       const initials = getAvatarInitials(other?.full_name || 'UN');
       const lastText = c.lastMsg
-        ? (c.lastMsg.message_type === 'image' ? '📷 Image' : c.lastMsg.content)
+        ? (c.lastMsg.message_type === 'image' ? '📷 Image' : c.lastMsg.message_type === 'voice' ? '🎤 Voice message' : c.lastMsg.content)
         : 'No messages yet';
       const time = c.lastMsg
         ? new Date(c.lastMsg.sent_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
@@ -376,10 +405,27 @@
 
       let bubbleContent = '';
       if (m.message_type === 'image' && m.media_url) {
-        bubbleContent = `<img src="${m.media_url}" style="max-width:220px;border-radius:8px;display:block" alt="Image">`;
-        if (m.content) bubbleContent += `<p style="margin-top:4px;font-size:.85rem">${escHtml(m.content)}</p>`;
+        bubbleContent = `
+          <a href="${m.media_url}" target="_blank" rel="noopener" style="display:block">
+            <img src="${m.media_url}"
+                 style="max-width:220px;width:100%;border-radius:10px;display:block;cursor:zoom-in"
+                 alt="Image"
+                 loading="lazy"
+                 onerror="this.outerHTML='<span style=\'font-size:.78rem;color:var(--text-muted)\'>Image no longer available</span>'">
+          </a>
+          ${m.content ? `<p style="margin-top:5px;font-size:.85rem">${escHtml(m.content)}</p>` : ''}
+        `;
       } else if (m.message_type === 'voice' && m.media_url) {
-        bubbleContent = `<audio controls src="${m.media_url}" style="max-width:220px;width:100%"></audio>`;
+        bubbleContent = `
+          <div style="display:flex;align-items:center;gap:8px;min-width:160px">
+            <i class="fas fa-microphone" style="color:var(--teal-dark);font-size:.85rem;flex-shrink:0"></i>
+            <audio controls src="${m.media_url}"
+                   style="flex:1;height:32px;min-width:130px;max-width:200px"
+                   preload="none"></audio>
+          </div>
+        `;
+      } else if (m.message_type === 'system') {
+        bubbleContent = `<span style="font-style:italic;color:var(--text-muted);font-size:.82rem">${escHtml(m.content)}</span>`;
       } else {
         bubbleContent = `<span>${escHtml(m.content)}</span>`;
       }
@@ -411,10 +457,37 @@
     const div = document.createElement('div');
     div.className = `message-row ${isSent ? 'sent' : 'received'}`;
     div.id = `msg-${msg.id}`;
+    // Build bubble content for all message types (mirrors renderMessages logic)
+    let bubbleContent = '';
+    if (msg.message_type === 'image' && msg.media_url) {
+      bubbleContent = `
+        <a href="${msg.media_url}" target="_blank" rel="noopener" style="display:block">
+          <img src="${msg.media_url}"
+               style="max-width:220px;width:100%;border-radius:10px;display:block;cursor:zoom-in"
+               alt="Image" loading="lazy"
+               onerror="this.outerHTML='<span style=&quot;font-size:.78rem;color:var(--text-muted)&quot;>Image no longer available</span>'"
+        </a>
+        ${msg.content ? `<p style="margin-top:5px;font-size:.85rem">${escHtml(msg.content)}</p>` : ''}
+      `;
+    } else if (msg.message_type === 'voice' && msg.media_url) {
+      bubbleContent = `
+        <div style="display:flex;align-items:center;gap:8px;min-width:160px">
+          <i class="fas fa-microphone" style="color:var(--teal-dark);font-size:.85rem;flex-shrink:0"></i>
+          <audio controls src="${msg.media_url}"
+                 style="flex:1;height:32px;min-width:130px;max-width:200px"
+                 preload="none"></audio>
+        </div>
+      `;
+    } else if (msg.message_type === 'system') {
+      bubbleContent = `<span style="font-style:italic;color:var(--text-muted);font-size:.82rem">${escHtml(msg.content)}</span>`;
+    } else {
+      bubbleContent = `<span>${escHtml(msg.content)}</span>`;
+    }
+
     div.innerHTML = `
       ${!isSent ? `<div class="msg-avatar">${getAvatarInitials(activeConv?.buyer?.full_name || 'B')}</div>` : ''}
       <div class="bubble ${isSent ? 'sent' : 'received'}">
-        <span>${escHtml(msg.content)}</span>
+        ${bubbleContent}
         <div class="bubble-time">${timeStr}</div>
       </div>
     `;
@@ -450,7 +523,7 @@
       // Re-populate the input so the user doesn't lose their message
       input.value = content;
       toggleSendVoiceBtn(content);
-      alert('Could not send message: ' + (error.message || 'Unknown error'));
+      showChatError('Could not send message: ' + (error.message || 'Unknown error'));
       return;
     }
 
@@ -490,19 +563,26 @@
 
     btn.innerHTML = '<i class="fas fa-image"></i>';
 
-    if (uploadErr) { alert('Upload failed: ' + uploadErr.message); return; }
+    if (uploadErr) { showChatError('Image upload failed: ' + uploadErr.message); return; }
 
-    const { data: urlData } = supabaseClient.storage.from('messages').getPublicUrl(filePath);
+    // messages bucket is PRIVATE — getPublicUrl() returns a broken URL.
+    // Must use createSignedUrl() to get a real, authenticated URL.
+    const imageSignedUrl = await signedMediaUrl(filePath);
+    if (!imageSignedUrl) {
+      showChatError('Could not generate image link. Check bucket permissions.');
+      return;
+    }
 
-    await supabaseClient.from('messages').insert({
+    const { error: dbErr } = await supabaseClient.from('messages').insert({
       conversation_id: activeConvId,
-      sender_id: currentUser.id,
-      content: '',
-      message_type: 'image',
-      media_url: urlData.publicUrl
+      sender_id:       currentUser.id,
+      content:         '',
+      message_type:    'image',
+      media_url:       imageSignedUrl
     });
 
-    await loadMessages(activeConvId); // refresh
+    if (dbErr) { showChatError('Failed to send image: ' + dbErr.message); return; }
+    await loadMessages(activeConvId);
     e.target.value = '';
   });
 
@@ -525,11 +605,17 @@
 
           const { error } = await supabaseClient.storage.from('messages').upload(path, blob);
           if (!error) {
-            const { data: urlData } = supabaseClient.storage.from('messages').getPublicUrl(path);
-            await supabaseClient.from('messages').insert({
-              conversation_id: activeConvId, sender_id: currentUser.id,
-              content: '🎤 Voice message', message_type: 'voice', media_url: urlData.publicUrl
-            });
+            // Private bucket — signed URL required
+            const voiceSignedUrl = await signedMediaUrl(path);
+            if (voiceSignedUrl) {
+              await supabaseClient.from('messages').insert({
+                conversation_id: activeConvId,
+                sender_id:       currentUser.id,
+                content:         '🎤 Voice message',
+                message_type:    'voice',
+                media_url:       voiceSignedUrl
+              });
+            }
             await loadMessages(activeConvId);
           }
           stream.getTracks().forEach(t => t.stop());
@@ -545,7 +631,7 @@
         btn.classList.add('recording');
         btn.innerHTML = '<i class="fas fa-stop"></i>';
       } catch {
-        alert('Microphone access denied. Check your browser permissions.');
+        showChatError('Microphone access denied. Please allow microphone in your browser settings.');
       }
     }
   };
@@ -611,7 +697,7 @@
       .update({ sold: true, sold_at: new Date().toISOString(), sold_to_id: activeConv.buyer_id })
       .eq('id', activeConv.product.id);
 
-    if (error) { alert('Error: ' + error.message); return; }
+    if (error) { showChatError('Error: ' + error.message); return; }
 
     // Send system message in chat
     await supabaseClient.from('messages').insert({
@@ -623,7 +709,7 @@
 
     document.getElementById('markSoldBanner').style.display = 'none';
     await loadMessages(activeConvId);
-    alert('✅ Item marked as sold!');
+    showChatError('✅ Item marked as sold!'); // reuses banner for success too
   };
 
   // ──────────────────────────────────────

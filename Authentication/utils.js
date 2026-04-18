@@ -43,26 +43,6 @@ export async function checkAuth() {
   }
 }
 
-//Avoid calling the same auth check multiple times in parallel (e.g. on multiple page components) by caching the promise and result.
-let currentUser = null;
-let authPromise = null;
-
-export async function getCurrentUser() {
-  if (currentUser) return currentUser;
-
-  // Prevent parallel calls
-  if (!authPromise) {
-    authPromise = supabase.auth.getUser().then(({ data, error }) => {
-      if (error) throw error;
-      currentUser = data.user;
-      return currentUser;
-    });
-  }
-
-  return authPromise;
-}
-
-
 /**
  * isCurrentUserSeller()
  * Returns true if the signed-in user owns a given seller ID.
@@ -341,6 +321,66 @@ export function showAlert(container, message, type = 'info') {
   }
 }
 
+
+// ================================================================
+// GLOBAL TOAST NOTIFICATION SYSTEM
+// ================================================================
+
+/**
+ * showToast(message, type, duration)
+ * Shows a visible, auto-dismissing notification in the bottom of the screen.
+ * Works on every page — injects the container if it doesn't exist.
+ *
+ * @param {string} message  - The message to show
+ * @param {'error'|'success'|'info'|'warning'} type
+ * @param {number} duration - ms before auto-dismiss (default 4000)
+ *
+ * @example
+ *   showToast('Image uploaded!', 'success');
+ *   showToast('Failed to send message: ' + err.message, 'error');
+ */
+export function showToast(message, type = 'info', duration = 4000) {
+  // Ensure container exists
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const icons = { error: 'fa-circle-exclamation', success: 'fa-circle-check',
+                  info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <i class="fas ${icons[type] || icons.info} toast-icon"></i>
+    <div class="toast-body">
+      <div class="toast-msg">${escHtml(message)}</div>
+    </div>
+    <button class="toast-close" onclick="this.closest('.toast').remove()" title="Dismiss">✕</button>
+  `;
+
+  container.appendChild(toast);
+
+  // Auto-dismiss
+  const timer = setTimeout(() => {
+    toast.style.animation = 'toastOut 0.2s ease forwards';
+    setTimeout(() => toast.remove(), 200);
+  }, duration);
+
+  // Manual close cancels timer
+  toast.querySelector('.toast-close').addEventListener('click', () => clearTimeout(timer));
+}
+
+/**
+ * showToastError(message)  — shorthand for showToast(msg, 'error')
+ * showToastSuccess(message) — shorthand for showToast(msg, 'success')
+ */
+export const showToastError   = (msg) => showToast(msg, 'error');
+export const showToastSuccess = (msg) => showToast(msg, 'success');
+
 // ================================================================
 // DEFAULT EXPORT (convenience — named imports are preferred)
 // ================================================================
@@ -361,5 +401,7 @@ export default {
   sleep,
   escHtml,
   showAlert,
-  getCurrentUser,
+  showToast,
+  showToastError,
+  showToastSuccess
 };
